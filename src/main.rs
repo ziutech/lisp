@@ -9,8 +9,10 @@ use chumsky::Parser;
 mod ast;
 mod parse;
 
+//TODO: move this to separate modules
 type Func = fn(&[ast::Expr]) -> ast::Expr;
 
+// TODO: create Error type
 trait Callable {
     fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, &'static str>;
     fn arity(&self) -> u8;
@@ -51,6 +53,7 @@ struct Environment {
     functions: HashMap<String, BuiltinFunction>,
 }
 
+// TODO: Macro for defining BuiltinFunction
 mod builtins {
     use crate::{ast, BuiltinFunction};
     fn _add(args: &[ast::Expr]) -> ast::Expr {
@@ -140,7 +143,7 @@ fn eval(env: &Environment, expr: &ast::Expr) -> Result<ast::Expr, &'static str> 
         .ok_or("Calling undeclared function")?
         .call(env, &args[1..])
     } else {
-        // FIXME: return &expr because vectors and hashmaps
+        // FIXME: return &expr because vectors and hashmaps (or boxed? (probably boxed...))
         Ok(expr.clone())
     }
 }

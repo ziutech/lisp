@@ -4,6 +4,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 
+// TODO: change to bytecode
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Expr {
