@@ -102,35 +102,35 @@ fn read(str: &str) -> ast::Expr {
     parse::parser().parse(str).unwrap()
 }
 
-fn eval(env: &Environment, expr: &ast::Expr) -> ast::Expr {
+fn eval(env: &Environment, expr: &ast::Expr) -> Result<ast::Expr, &'static str> {
     use ast::Expr::*;
     if let List(args) = expr {
-        let name = args.get(0);
-        if name.is_none() {
-            return ast::Expr::Error("No object to call");
-        }
-        let name: &ast::Expr = name.unwrap();
+        let name = args.get(0).ok_or("No object to call")?;
         let func = match name {
             Ident(name) => env.functions.get(name),
             Add | Sub | Mul | Div => env.functions.get(&name.to_string()),
-            _ => return ast::Expr::Error("Invalid call object"),
-        };
-        if func.is_none() {
-            return ast::Expr::Error("Calling undeclared function");
+            _ => return Err("Invalid call object"),
         }
-        let func = func.unwrap();
+        .ok_or("Calling undeclared function")?;
         if !func.infinite && args.len() - 1 < func.arity.into() {
-            return ast::Expr::Error("Not enough parameters");
+            return Err("Not enough parameters");
         }
-        let params: &Vec<ast::Expr> = &args[1..].into_iter().map(|exp| eval(&env, exp)).collect();
-        func(params)
+        let params: &Vec<ast::Expr> = &args[1..]
+            .into_iter()
+            .map(|exp| eval(&env, exp))
+            .collect::<Result<Vec<ast::Expr>, &str>>()?;
+        Ok(func(params))
     } else {
         // FIXME: return &expr because vectors and hashmaps
-        expr.clone()
+        Ok(expr.clone())
     }
 }
-fn print(expr: ast::Expr) -> String {
-    format!("{}", expr)
+
+fn print(res: Result<ast::Expr, &str>) -> String {
+    match res {
+        Ok(expr) => format!("{}", expr),
+        Err(e) => format!("ERROR: {}", e),
+    }
 }
 fn rep(str: &str) -> String {
     let env = Environment::standard();

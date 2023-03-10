@@ -7,7 +7,6 @@ use std::{
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Expr {
-    Error(&'static str),
     Num(i64),
     Symbol(String),
     Ident(String),
@@ -28,7 +27,6 @@ use Expr::*;
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Error(s) => write!(f, "ERROR: {s}")?,
             Num(i) => write!(f, "{i}")?,
             Symbol(str) => write!(f, "{str}")?,
             Ident(ident) => write!(f, "{ident}")?,
