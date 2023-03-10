@@ -17,7 +17,12 @@ pub fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
             just("/").to(Expr::Div),
         ))
         .padded_by(whitespace());
-        let atom = int.or(ident).or(symbol);
+        let atom = int
+            .or(text::keyword("nil").map(|_| Expr::Nil))
+            .or(text::keyword("true").map(|_| Expr::True))
+            .or(text::keyword("false").map(|_| Expr::False))
+            .or(ident)
+            .or(symbol);
         let list = expr
             .clone()
             .padded_by(whitespace())
@@ -74,10 +79,6 @@ mod tests {
         assert_eq!(parse_single_expr("()"), List(Vec::new()));
         assert_eq!(parse_single_expr("(  )"), List(Vec::new()));
         assert_eq!(
-            parse_single_expr("(nil)"),
-            List(vec![Ident("nil".to_string())])
-        );
-        assert_eq!(
             parse_single_expr("( +   1   (-   2 3   )   )  "),
             List(vec![Add, Num(1), List(vec![Sub, Num(2), Num(3)])])
         );
@@ -89,5 +90,12 @@ mod tests {
             parse_single_expr("(1 2, 3,,,,),,"),
             List(vec![Num(1), Num(2), Num(3)])
         );
+    }
+
+    #[test]
+    fn builtins() {
+        assert_eq!(parse_single_expr("nil"), Nil);
+        assert_eq!(parse_single_expr("true"), True);
+        assert_eq!(parse_single_expr("false"), False);
     }
 }

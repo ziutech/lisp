@@ -15,6 +15,9 @@ pub enum Expr {
     Sub,
     Mul,
     Div,
+    Nil,
+    True,
+    False,
 
     // Neg,
     List(Vec<Expr>),
@@ -33,6 +36,9 @@ impl Display for Expr {
             Sub => write!(f, "-")?,
             Mul => write!(f, "*")?,
             Div => write!(f, "/")?,
+            Nil => write!(f, "Nil")?,
+            True => write!(f, "True")?,
+            False => write!(f, "False")?,
             // Neg,
             List(l) => {
                 write!(f, "({first}", first = l[0])?;
