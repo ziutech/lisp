@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::io::{BufRead, Write};
 
@@ -8,18 +9,119 @@ use chumsky::Parser;
 mod ast;
 mod parse;
 
+type Func = fn(&[ast::Expr]) -> ast::Expr;
+
+pub struct Function {
+    arity: u8,
+    f: Func,
+}
+
+impl std::ops::Deref for Function {
+    type Target = Func;
+
+    fn deref(&self) -> &Self::Target {
+        &self.f
+    }
+}
+
+struct Environment {
+    functions: HashMap<String, Function>,
+}
+
+mod builtins {
+    use crate::{ast, Function};
+    fn _add(args: &[ast::Expr]) -> ast::Expr {
+        args.into_iter().sum()
+    }
+
+    pub fn add() -> Function {
+        Function {
+            arity: u8::MAX,
+            f: _add,
+        }
+    }
+
+    fn _sub(args: &[ast::Expr]) -> ast::Expr {
+        match (args.get(0), args.get(1)) {
+            (Some(a), Some(b)) => a - b,
+            _ => todo!("Resolving not enough arguments in `(- ...)`"),
+        }
+    }
+
+    pub fn sub() -> Function {
+        Function { arity: 2, f: _sub }
+    }
+
+    fn _mul(args: &[ast::Expr]) -> ast::Expr {
+        args.into_iter().product()
+    }
+
+    pub fn mul() -> Function {
+        Function {
+            arity: u8::MAX,
+            f: _mul,
+        }
+    }
+
+    fn _div(args: &[ast::Expr]) -> ast::Expr {
+        match (args.get(0), args.get(1)) {
+            (Some(a), Some(b)) => a / b,
+            _ => todo!("Resolving not enough arguments in `(/ ...)`"),
+        }
+    }
+
+    pub fn div() -> Function {
+        Function { arity: 2, f: _div }
+    }
+}
+
+impl Environment {
+    fn standard() -> Self {
+        let functions = HashMap::from([
+            ("+".to_owned(), builtins::add()),
+            ("*".to_owned(), builtins::mul()),
+            ("-".to_owned(), builtins::sub()),
+            ("/".to_owned(), builtins::div()),
+        ]);
+        Environment { functions }
+    }
+}
+
 fn read(str: &str) -> ast::Expr {
     parse::parser().parse(str).unwrap()
 }
-fn eval(str: ast::Expr) -> ast::Expr {
-    str
+
+fn eval(env: &Environment, expr: &ast::Expr) -> ast::Expr {
+    use ast::Expr::*;
+    if let List(args) = expr {
+        if let Ident(name) = &args[0] {
+            let params: &Vec<ast::Expr> =
+                &args[1..].into_iter().map(|exp| eval(&env, exp)).collect();
+            let func = env.functions.get(name);
+            if func.is_none() {
+                return ast::Expr::Error("Calling undeclared function");
+            }
+            let func = func.unwrap();
+            if args.len() - 1 < func.arity.into() {
+                return ast::Expr::Error("Not enough parameters");
+            }
+
+            return func(&params);
+        } else {
+            return ast::Expr::Error("Invalid call object");
+        }
+    } else {
+        // FIXME: return &expr because vectors and hashmaps
+        expr.clone()
+    }
 }
 fn print(expr: ast::Expr) -> String {
     format!("{}", expr)
 }
 fn rep(str: &str) -> String {
+    let env = Environment::standard();
     let ast = read(str);
-    let result = eval(ast);
+    let result = eval(&env, &ast);
     print(result)
 }
 

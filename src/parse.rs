@@ -10,13 +10,9 @@ pub fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
             .padded_by(whitespace());
 
         let ident = text::ident().map(|s| Expr::Ident(s));
-        let symbol = choice((
-            just("+").to(Expr::Add),
-            just("-").to(Expr::Sub),
-            just("*").to(Expr::Mul),
-            just("/").to(Expr::Div),
-        ))
-        .padded_by(whitespace());
+        let symbol = move |c: &'static str| just(c).to(Expr::Ident(c.to_string()));
+        let symbol =
+            choice((symbol("+"), symbol("-"), symbol("*"), symbol("/"))).padded_by(whitespace());
         let atom = int.or(ident).or(symbol);
         let list = expr
             .clone()
