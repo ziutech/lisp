@@ -13,6 +13,7 @@ type Func = fn(&[ast::Expr]) -> ast::Expr;
 
 pub struct Function {
     arity: u8,
+    infinite: bool,
     f: Func,
 }
 
@@ -37,6 +38,7 @@ mod builtins {
     pub fn add() -> Function {
         Function {
             arity: u8::MAX,
+            infinite: true,
             f: _add,
         }
     }
@@ -49,7 +51,11 @@ mod builtins {
     }
 
     pub fn sub() -> Function {
-        Function { arity: 2, f: _sub }
+        Function {
+            arity: 2,
+            infinite: false,
+            f: _sub,
+        }
     }
 
     fn _mul(args: &[ast::Expr]) -> ast::Expr {
@@ -59,6 +65,7 @@ mod builtins {
     pub fn mul() -> Function {
         Function {
             arity: u8::MAX,
+            infinite: true,
             f: _mul,
         }
     }
@@ -71,7 +78,11 @@ mod builtins {
     }
 
     pub fn div() -> Function {
-        Function { arity: 2, f: _div }
+        Function {
+            arity: 2,
+            infinite: false,
+            f: _div,
+        }
     }
 }
 
@@ -94,22 +105,25 @@ fn read(str: &str) -> ast::Expr {
 fn eval(env: &Environment, expr: &ast::Expr) -> ast::Expr {
     use ast::Expr::*;
     if let List(args) = expr {
-        if let Ident(name) = &args[0] {
-            let params: &Vec<ast::Expr> =
-                &args[1..].into_iter().map(|exp| eval(&env, exp)).collect();
-            let func = env.functions.get(name);
-            if func.is_none() {
-                return ast::Expr::Error("Calling undeclared function");
-            }
-            let func = func.unwrap();
-            if args.len() - 1 < func.arity.into() {
-                return ast::Expr::Error("Not enough parameters");
-            }
-
-            return func(&params);
-        } else {
-            return ast::Expr::Error("Invalid call object");
+        let name = args.get(0);
+        if name.is_none() {
+            return ast::Expr::Error("No object to call");
         }
+        let name: &ast::Expr = name.unwrap();
+        let func = match name {
+            Ident(name) => env.functions.get(name),
+            Add | Sub | Mul | Div => env.functions.get(&name.to_string()),
+            _ => return ast::Expr::Error("Invalid call object"),
+        };
+        if func.is_none() {
+            return ast::Expr::Error("Calling undeclared function");
+        }
+        let func = func.unwrap();
+        if !func.infinite && args.len() - 1 < func.arity.into() {
+            return ast::Expr::Error("Not enough parameters");
+        }
+        let params: &Vec<ast::Expr> = &args[1..].into_iter().map(|exp| eval(&env, exp)).collect();
+        func(params)
     } else {
         // FIXME: return &expr because vectors and hashmaps
         expr.clone()
