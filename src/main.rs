@@ -11,32 +11,54 @@ mod parse;
 
 type Func = fn(&[ast::Expr]) -> ast::Expr;
 
-pub struct Function {
+trait Callable {
+    fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, &'static str>;
+    fn arity(&self) -> u8;
+    fn infinite(&self) -> bool;
+    fn enough_arguments(&self, args: &[ast::Expr]) -> bool {
+        !self.infinite() && args.len() - 1 < self.arity().into()
+    }
+}
+
+pub struct BuiltinFunction {
     arity: u8,
     infinite: bool,
     f: Func,
 }
 
-impl std::ops::Deref for Function {
-    type Target = Func;
-
-    fn deref(&self) -> &Self::Target {
-        &self.f
+impl Callable for BuiltinFunction {
+    fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, &'static str> {
+        if !self.enough_arguments(args) {
+            return Err("Not enough arguments");
+        }
+        let params: &Vec<ast::Expr> = &args[1..]
+            .into_iter()
+            .map(|exp| eval(&env, exp))
+            .collect::<Result<Vec<ast::Expr>, &str>>()?;
+        Ok((self.f)(params))
+    }
+    #[inline]
+    fn arity(&self) -> u8 {
+        self.arity
+    }
+    #[inline]
+    fn infinite(&self) -> bool {
+        self.infinite
     }
 }
 
 struct Environment {
-    functions: HashMap<String, Function>,
+    functions: HashMap<String, BuiltinFunction>,
 }
 
 mod builtins {
-    use crate::{ast, Function};
+    use crate::{ast, BuiltinFunction};
     fn _add(args: &[ast::Expr]) -> ast::Expr {
         args.into_iter().sum()
     }
 
-    pub fn add() -> Function {
-        Function {
+    pub fn add() -> BuiltinFunction {
+        BuiltinFunction {
             arity: u8::MAX,
             infinite: true,
             f: _add,
@@ -50,8 +72,8 @@ mod builtins {
         }
     }
 
-    pub fn sub() -> Function {
-        Function {
+    pub fn sub() -> BuiltinFunction {
+        BuiltinFunction {
             arity: 2,
             infinite: false,
             f: _sub,
@@ -62,8 +84,8 @@ mod builtins {
         args.into_iter().product()
     }
 
-    pub fn mul() -> Function {
-        Function {
+    pub fn mul() -> BuiltinFunction {
+        BuiltinFunction {
             arity: u8::MAX,
             infinite: true,
             f: _mul,
@@ -77,8 +99,8 @@ mod builtins {
         }
     }
 
-    pub fn div() -> Function {
-        Function {
+    pub fn div() -> BuiltinFunction {
+        BuiltinFunction {
             arity: 2,
             infinite: false,
             f: _div,
@@ -96,6 +118,10 @@ impl Environment {
         ]);
         Environment { functions }
     }
+
+    fn get_fn(&self, name: &str) -> Option<&BuiltinFunction> {
+        self.functions.get(name)
+    }
 }
 
 fn read(str: &str) -> ast::Expr {
@@ -106,20 +132,13 @@ fn eval(env: &Environment, expr: &ast::Expr) -> Result<ast::Expr, &'static str> 
     use ast::Expr::*;
     if let List(args) = expr {
         let name = args.get(0).ok_or("No object to call")?;
-        let func = match name {
-            Ident(name) => env.functions.get(name),
-            Add | Sub | Mul | Div => env.functions.get(&name.to_string()),
+        match name {
+            Ident(name) => env.get_fn(name),
+            Add | Sub | Mul | Div => env.get_fn(&name.to_string()),
             _ => return Err("Invalid call object"),
         }
-        .ok_or("Calling undeclared function")?;
-        if !func.infinite && args.len() - 1 < func.arity.into() {
-            return Err("Not enough parameters");
-        }
-        let params: &Vec<ast::Expr> = &args[1..]
-            .into_iter()
-            .map(|exp| eval(&env, exp))
-            .collect::<Result<Vec<ast::Expr>, &str>>()?;
-        Ok(func(params))
+        .ok_or("Calling undeclared function")?
+        .call(env, &args[1..])
     } else {
         // FIXME: return &expr because vectors and hashmaps
         Ok(expr.clone())
