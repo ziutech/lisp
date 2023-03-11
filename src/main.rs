@@ -69,10 +69,9 @@ mod builtins {
     }
 
     fn _sub(args: &[ast::Expr]) -> ast::Expr {
-        match (args.get(0), args.get(1)) {
-            (Some(a), Some(b)) => a - b,
-            _ => todo!("Resolving not enough arguments in `(- ...)`"),
-        }
+        // we always check for arity in Callable::call()
+        // so no need to do it here
+        &args[0] - &args[1]
     }
 
     pub fn sub() -> BuiltinFunction {
@@ -96,10 +95,9 @@ mod builtins {
     }
 
     fn _div(args: &[ast::Expr]) -> ast::Expr {
-        match (args.get(0), args.get(1)) {
-            (Some(a), Some(b)) => a / b,
-            _ => todo!("Resolving not enough arguments in `(/ ...)`"),
-        }
+        // we always check for arity in Callable::call()
+        // so no need to do it here
+        &args[0] / &args[1]
     }
 
     pub fn div() -> BuiltinFunction {
