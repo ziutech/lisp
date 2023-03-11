@@ -9,7 +9,7 @@ pub fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
             .map(|s: String| Expr::Num(s.parse().unwrap()))
             .padded_by(whitespace());
 
-        let ident = text::ident().map(|s| Expr::Ident(s));
+        let ident = text::ident().map(Expr::Ident);
         let symbol = choice((
             just("+").to(Expr::Add),
             just("-").to(Expr::Sub),

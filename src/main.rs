@@ -34,8 +34,8 @@ impl Callable for BuiltinFunction {
             return Err("Not enough arguments");
         }
         let params: &Vec<ast::Expr> = &args[1..]
-            .into_iter()
-            .map(|exp| eval(&env, exp))
+            .iter()
+            .map(|exp| eval(env, exp))
             .collect::<Result<Vec<ast::Expr>, &str>>()?;
         Ok((self.f)(params))
     }
@@ -57,7 +57,7 @@ struct Environment {
 mod builtins {
     use crate::{ast, BuiltinFunction};
     fn _add(args: &[ast::Expr]) -> ast::Expr {
-        args.into_iter().sum()
+        args.iter().sum()
     }
 
     pub fn add() -> BuiltinFunction {
@@ -84,7 +84,7 @@ mod builtins {
     }
 
     fn _mul(args: &[ast::Expr]) -> ast::Expr {
-        args.into_iter().product()
+        args.iter().product()
     }
 
     pub fn mul() -> BuiltinFunction {
