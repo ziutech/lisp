@@ -6,15 +6,33 @@ use std::result::Result;
 
 use chumsky::Parser;
 
+mod misc {
+    pub enum Error {
+        UndefinedCall,
+        NotEnoughParameters,
+        EmptyCall,
+    }
+
+    impl std::fmt::Display for Error {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match &self {
+                Error::UndefinedCall => write!(f, "Invalid call object")?,
+                Error::NotEnoughParameters => write!(f, "Not enough parameters")?,
+                Error::EmptyCall => write!(f, "Empty call")?,
+            };
+            Ok(())
+        }
+    }
+}
+
 mod ast;
 mod parse;
 
 //TODO: move this to separate modules
 type Func = fn(&[ast::Expr]) -> ast::Expr;
 
-// TODO: create Error type
 trait Callable {
-    fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, &'static str>;
+    fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, misc::Error>;
     fn arity(&self) -> u8;
     fn infinite(&self) -> bool;
     fn enough_arguments(&self, args: &[ast::Expr]) -> bool {
@@ -29,14 +47,14 @@ pub struct BuiltinFunction {
 }
 
 impl Callable for BuiltinFunction {
-    fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, &'static str> {
+    fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, misc::Error> {
         if !self.enough_arguments(args) {
-            return Err("Not enough arguments");
+            return Err(misc::Error::NotEnoughParameters);
         }
         let params: &Vec<ast::Expr> = &args[1..]
             .iter()
             .map(|exp| eval(env, exp))
-            .collect::<Result<Vec<ast::Expr>, &str>>()?;
+            .collect::<Result<Vec<ast::Expr>, misc::Error>>()?;
         Ok((self.f)(params))
     }
     #[inline]
@@ -129,16 +147,16 @@ fn read(str: &str) -> ast::Expr {
     parse::parser().parse(str).unwrap()
 }
 
-fn eval(env: &Environment, expr: &ast::Expr) -> Result<ast::Expr, &'static str> {
+fn eval(env: &Environment, expr: &ast::Expr) -> Result<ast::Expr, misc::Error> {
     use ast::Expr::*;
     if let List(args) = expr {
-        let name = args.get(0).ok_or("No object to call")?;
+        let name = args.get(0).ok_or(misc::Error::EmptyCall)?;
         match name {
             Ident(name) => env.get_fn(name),
             Add | Sub | Mul | Div => env.get_fn(&name.to_string()),
-            _ => return Err("Invalid call object"),
+            _ => return Err(misc::Error::UndefinedCall),
         }
-        .ok_or("Calling undeclared function")?
+        .ok_or(misc::Error::UndefinedCall)?
         .call(env, &args[1..])
     } else {
         // FIXME: return &expr because vectors and hashmaps (or boxed? (probably boxed...))
@@ -146,7 +164,7 @@ fn eval(env: &Environment, expr: &ast::Expr) -> Result<ast::Expr, &'static str> 
     }
 }
 
-fn print(res: Result<ast::Expr, &str>) -> String {
+fn print(res: Result<ast::Expr, misc::Error>) -> String {
     match res {
         Ok(expr) => format!("{}", expr),
         Err(e) => format!("ERROR: {}", e),
