@@ -65,7 +65,6 @@ mod builtins {
     }
 
     fn _sub(args: &[ast::Expr]) -> ast::Expr {
-        println!("{:?}, {:?}", args[0], args[1]);
         &args[0] - &_add(&args[1..])
     }
 
