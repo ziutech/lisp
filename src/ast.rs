@@ -8,7 +8,7 @@ use std::{
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Expr {
-    Num(i64),
+    Num(f64),
     Symbol(String),
     Ident(String),
     Add,
@@ -103,7 +103,7 @@ impl<'a> Sum<&'a Expr> for Expr {
     where
         I: Iterator<Item = &'a Self>,
     {
-        iter.fold(Num(0), |a, b| a + b.to_owned())
+        iter.fold(Num(0.0), |a, b| a + b.to_owned())
     }
 }
 impl<'a> Product<&'a Expr> for Expr {
@@ -111,6 +111,7 @@ impl<'a> Product<&'a Expr> for Expr {
     where
         I: Iterator<Item = &'a Self>,
     {
-        iter.fold(Num(0), |a, b| a * b.to_owned())
+        iter.fold(Num(1.0), |a, b| a * b.to_owned())
+
     }
 }

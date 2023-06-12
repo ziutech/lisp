@@ -53,7 +53,7 @@ mod tests {
 
     #[test]
     fn numbers() {
-        assert_eq!(parse_single_expr("52"), Expr::Num(52));
+        assert_eq!(parse_single_expr("52"), Expr::Num(52.0));
     }
     #[test]
     fn symbols() {
@@ -74,13 +74,13 @@ mod tests {
     fn lists() {
         assert_eq!(
             parse_single_expr("(+ 1 2)"),
-            List(vec![Add, Num(1), Num(2)])
+            List(vec![Add, Num(1.0), Num(2.0)])
         );
         assert_eq!(parse_single_expr("()"), List(Vec::new()));
         assert_eq!(parse_single_expr("(  )"), List(Vec::new()));
         assert_eq!(
             parse_single_expr("( +   1   (-   2 3   )   )  "),
-            List(vec![Add, Num(1), List(vec![Sub, Num(2), Num(3)])])
+            List(vec![Add, Num(1.0), List(vec![Sub, Num(2.0), Num(3.0)])])
         );
         assert_eq!(
             parse_single_expr("(()())"),
@@ -88,7 +88,7 @@ mod tests {
         );
         assert_eq!(
             parse_single_expr("(1 2, 3,,,,),,"),
-            List(vec![Num(1), Num(2), Num(3)])
+            List(vec![Num(1.0), Num(2.0), Num(3.0)])
         );
     }
 

@@ -33,37 +33,19 @@ type Func = fn(&[ast::Expr]) -> ast::Expr;
 
 trait Callable {
     fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, misc::Error>;
-    fn arity(&self) -> u8;
-    fn infinite(&self) -> bool;
-    fn enough_arguments(&self, args: &[ast::Expr]) -> bool {
-        !self.infinite() && args.len() - 1 < self.arity().into()
-    }
 }
 
 pub struct BuiltinFunction {
-    arity: u8,
-    infinite: bool,
     f: Func,
 }
 
 impl Callable for BuiltinFunction {
     fn call(&self, env: &Environment, args: &[ast::Expr]) -> Result<ast::Expr, misc::Error> {
-        if !self.enough_arguments(args) {
-            return Err(misc::Error::NotEnoughParameters);
-        }
-        let params: &Vec<ast::Expr> = &args[1..]
+        let params: &Vec<ast::Expr> = &args
             .iter()
             .map(|exp| eval(env, exp))
             .collect::<Result<Vec<ast::Expr>, misc::Error>>()?;
         Ok((self.f)(params))
-    }
-    #[inline]
-    fn arity(&self) -> u8 {
-        self.arity
-    }
-    #[inline]
-    fn infinite(&self) -> bool {
-        self.infinite
     }
 }
 
@@ -79,25 +61,16 @@ mod builtins {
     }
 
     pub fn add() -> BuiltinFunction {
-        BuiltinFunction {
-            arity: u8::MAX,
-            infinite: true,
-            f: _add,
-        }
+        BuiltinFunction { f: _add }
     }
 
     fn _sub(args: &[ast::Expr]) -> ast::Expr {
-        // we always check for arity in Callable::call()
-        // so no need to do it here
-        &args[0] - &args[1]
+        println!("{:?}, {:?}", args[0], args[1]);
+        &args[0] - &_add(&args[1..])
     }
 
     pub fn sub() -> BuiltinFunction {
-        BuiltinFunction {
-            arity: 2,
-            infinite: false,
-            f: _sub,
-        }
+        BuiltinFunction { f: _sub }
     }
 
     fn _mul(args: &[ast::Expr]) -> ast::Expr {
@@ -105,25 +78,15 @@ mod builtins {
     }
 
     pub fn mul() -> BuiltinFunction {
-        BuiltinFunction {
-            arity: u8::MAX,
-            infinite: true,
-            f: _mul,
-        }
+        BuiltinFunction { f: _mul }
     }
 
     fn _div(args: &[ast::Expr]) -> ast::Expr {
-        // we always check for arity in Callable::call()
-        // so no need to do it here
-        &args[0] / &args[1]
+        &args[0] / &_mul(&args[1..])
     }
 
     pub fn div() -> BuiltinFunction {
-        BuiltinFunction {
-            arity: 2,
-            infinite: false,
-            f: _div,
-        }
+        BuiltinFunction { f: _div }
     }
 }
 
@@ -151,6 +114,7 @@ fn eval(env: &Environment, expr: &ast::Expr) -> Result<ast::Expr, misc::Error> {
     use ast::Expr::*;
     if let List(args) = expr {
         let name = args.get(0).ok_or(misc::Error::EmptyCall)?;
+        println!("{:?}", &args[1..]);
         match name {
             Ident(name) => env.get_fn(name),
             Add | Sub | Mul | Div => env.get_fn(&name.to_string()),
