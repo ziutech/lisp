@@ -112,6 +112,5 @@ impl<'a> Product<&'a Expr> for Expr {
         I: Iterator<Item = &'a Self>,
     {
         iter.fold(Num(1.0), |a, b| a * b.to_owned())
-
     }
 }
