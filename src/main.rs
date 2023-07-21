@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     error,
     io::{stdin, stdout, BufRead, Write},
 };
@@ -6,17 +7,44 @@ use std::{
 #[derive(Debug)]
 enum Expr {
     Number(i32),
-    Ident(String),
+    Ident {
+        ident: String,
+        is_bind: bool,
+    },
     Call {
         func_name: String,
         arguments: Vec<Expr>,
     },
 }
 
+#[derive(Debug, Clone)]
+enum Value {
+    Number(i32),
+    String(String),
+    Func(Func),
+}
+
+impl Value {
+    fn as_func(&self) -> &Func {
+        match self {
+            Value::Func(f) => f,
+            _ => panic!("not a function"),
+        }
+    }
+
+    fn as_str<'a>(&'a self) -> &'a str {
+        match self {
+            Value::String(s) => s.as_str(),
+            _ => panic!("not a str"),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 enum TokenType {
     LeftParen,
     RightParen,
+    At,
     Ident(String),
     Number(i32),
 }
@@ -56,6 +84,12 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
                 Some(Token {
                     token_type: TokenType::RightParen,
+                })
+            }
+            b'@' => {
+                self.position += 1;
+                Some(Token {
+                    token_type: TokenType::At,
                 })
             }
             b'0'..=b'9' => loop {
@@ -138,9 +172,22 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_sexpr();
                     arguments.push(expr);
                 }
-                TokenType::Ident(s) => arguments.push(Expr::Ident(s)),
+                TokenType::Ident(s) => arguments.push(Expr::Ident {
+                    ident: s,
+                    is_bind: false,
+                }),
                 TokenType::Number(i) => arguments.push(Expr::Number(i)),
                 TokenType::RightParen => break,
+                TokenType::At => {
+                    let ident = match self.tokens.next().unwrap().token_type {
+                        TokenType::Ident(s) => s,
+                        t => panic!("invalid token: {t:#?}"),
+                    };
+                    arguments.push(Expr::Ident {
+                        ident,
+                        is_bind: true,
+                    });
+                }
             }
         }
         Expr::Call {
@@ -150,9 +197,57 @@ impl<'a> Parser<'a> {
     }
 }
 
-fn eval(expr: &Expr) {}
+fn plus(args: &[Value], env: &mut Env<'_>) -> Value {
+    let mut acc = 0;
+    for v in args.iter() {
+        match v {
+            Value::Number(a) => acc += a,
+            _ => todo!(),
+        }
+    }
+    return Value::Number(acc);
+}
+
+fn r#let(args: &[Value], env: &mut Env<'_>) -> Value {
+    let name = args[0].as_str();
+    let value = args[1].clone();
+    env.insert(name.to_owned(), value.clone());
+    value.clone()
+}
+
+// TODO: add manually triggered garbage collector
+fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
+    match expr {
+        Expr::Number(i) => Value::Number(*i),
+        Expr::Ident { ident, is_bind } => {
+            if *is_bind {
+                Value::String(ident.clone())
+            } else {
+                env.get(ident).expect("undefined identifier").clone()
+            }
+        }
+        Expr::Call {
+            func_name,
+            arguments,
+        } => {
+            let arguments: Vec<Value> = arguments.iter().map(|expr| eval(expr, env)).collect();
+            let func = env
+                .get(func_name.as_str())
+                .expect("undefined function")
+                .as_func();
+
+            func(&arguments, env)
+        }
+    }
+}
+
+type Func = fn(&[Value], env: &mut Env<'_>) -> Value;
+type Env<'a> = HashMap<String, Value>;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
+    let mut env = HashMap::new();
+    env.insert("plus".to_owned(), Value::Func(plus));
+    env.insert("let".to_owned(), Value::Func(r#let));
     loop {
         print!("repl> ");
         stdout().lock().flush()?;
@@ -160,6 +255,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         stdin().lock().read_line(&mut buf)?;
         let text: Vec<u8> = buf.bytes().collect();
         let expr = Parser::new(&text).parse();
-        println!("{:?}", expr);
+        println!("{expr:?}");
+
+        let result = eval(&expr, &mut env);
+        println!("{:?}", result);
     }
 }
