@@ -1,12 +1,14 @@
 use std::{
     collections::HashMap,
     error,
+    fmt::Display,
     io::{stdin, stdout, BufRead, Write},
 };
 
 #[derive(Debug)]
 enum Expr {
     Number(i32),
+    String(String),
     Ident {
         ident: String,
         is_bind: bool,
@@ -22,6 +24,17 @@ enum Value {
     Number(i32),
     String(String),
     Func(Func),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\t")?;
+        match self {
+            Value::Number(i) => writeln!(f, "{i}"),
+            Value::String(s) => writeln!(f, "\"{s}\""),
+            Value::Func(_) => todo!("display for functions"),
+        }
+    }
 }
 
 impl Value {
@@ -45,6 +58,7 @@ enum TokenType {
     LeftParen,
     RightParen,
     At,
+    String(String),
     Ident(String),
     Number(i32),
 }
@@ -92,6 +106,23 @@ impl<'a> Lexer<'a> {
                     token_type: TokenType::At,
                 })
             }
+            b'"' => loop {
+                position += 1;
+                let c = self.text.get(position)?;
+                match c {
+                    b'"' => {
+                        // self.pos + 1 to remove first quotes
+                        let string = std::str::from_utf8(&self.text[(self.position + 1)..position])
+                            .unwrap()
+                            .to_owned();
+                        self.position = position + 1; // + 1 to skip last quote
+                        break Some(Token {
+                            token_type: TokenType::String(string),
+                        });
+                    }
+                    _ => position += 1,
+                }
+            },
             b'0'..=b'9' => loop {
                 let c = self.text.get(position)?;
                 match c {
@@ -172,6 +203,7 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_sexpr();
                     arguments.push(expr);
                 }
+                TokenType::String(s) => arguments.push(Expr::String(s)),
                 TokenType::Ident(s) => arguments.push(Expr::Ident {
                     ident: s,
                     is_bind: false,
@@ -215,9 +247,14 @@ fn r#let(args: &[Value], env: &mut Env<'_>) -> Value {
     value.clone()
 }
 
+fn id(args: &[Value], env: &mut Env<'_>) -> Value {
+    args[0].clone()
+}
+
 // TODO: add manually triggered garbage collector
 fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
     match expr {
+        Expr::String(s) => Value::String(s.clone()),
         Expr::Number(i) => Value::Number(*i),
         Expr::Ident { ident, is_bind } => {
             if *is_bind {
@@ -248,6 +285,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut env = HashMap::new();
     env.insert("plus".to_owned(), Value::Func(plus));
     env.insert("let".to_owned(), Value::Func(r#let));
+    env.insert("id".to_owned(), Value::Func(id));
     loop {
         print!("repl> ");
         stdout().lock().flush()?;
@@ -258,6 +296,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         println!("{expr:?}");
 
         let result = eval(&expr, &mut env);
-        println!("{:?}", result);
+        println!("{}", result);
     }
 }
