@@ -16,23 +16,28 @@ enum Expr {
     Call {
         func_name: String,
         arguments: Vec<Expr>,
+        is_macro: bool,
     },
 }
 
 #[derive(Debug, Clone)]
 enum Value {
+    Nil,
     Number(i32),
     String(String),
     Func(Func),
+    Macro(Macro),
 }
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\t")?;
         match self {
+            Value::Nil => writeln!(f, "nil"),
             Value::Number(i) => writeln!(f, "{i}"),
             Value::String(s) => writeln!(f, "\"{s}\""),
             Value::Func(_) => todo!("display for functions"),
+            Value::Macro(_) => todo!("display for macros"),
         }
     }
 }
@@ -42,6 +47,13 @@ impl Value {
         match self {
             Value::Func(f) => f,
             _ => panic!("not a function"),
+        }
+    }
+
+    fn as_macro(&self) -> &Macro {
+        match self {
+            Value::Macro(f) => f,
+            _ => panic!("not a macro"),
         }
     }
 
@@ -58,6 +70,7 @@ enum TokenType {
     LeftParen,
     RightParen,
     At,
+    Colon,
     String(String),
     Ident(String),
     Number(i32),
@@ -104,6 +117,12 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
                 Some(Token {
                     token_type: TokenType::At,
+                })
+            }
+            b':' => {
+                self.position += 1;
+                Some(Token {
+                    token_type: TokenType::Colon,
                 })
             }
             b'"' => {
@@ -195,8 +214,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_sexpr(&mut self) -> Expr {
-        let TokenType::Ident(func_name) = self.tokens.next().unwrap().token_type else {
-            panic!("expected an identifier");
+        let mut is_macro = false;
+        let func_name = match self.tokens.next().unwrap().token_type {
+            TokenType::Colon => {
+                is_macro = true;
+                let TokenType::Ident(ident) = self.tokens.next().unwrap().token_type else {
+                    panic!("expected an colon or identifier");
+                };
+                ident
+            }
+            TokenType::Ident(ident) => ident,
+            _ => panic!("expected an colon or identifier"),
         };
         let mut arguments = Vec::new();
         loop {
@@ -223,11 +251,13 @@ impl<'a> Parser<'a> {
                         is_bind: true,
                     });
                 }
+                TokenType::Colon => panic!("unexpected colon"),
             }
         }
         Expr::Call {
             func_name,
             arguments,
+            is_macro,
         }
     }
 }
@@ -254,6 +284,22 @@ fn id(args: &[Value], env: &mut Env<'_>) -> Value {
     args[0].clone()
 }
 
+fn scope(exprs: &[Expr], env: &mut Env<'_>) -> Value {
+    let mut new_env = HashMap::new();
+    new_env.insert(
+        "print".to_owned(),
+        Value::Func(|v, _| {
+            println!("{v:?}");
+            v[0].clone()
+        }),
+    );
+    let mut some_value = None;
+    for expr in exprs {
+        some_value = Some(eval(expr, &mut new_env));
+    }
+    some_value.unwrap_or(Value::Nil)
+}
+
 // TODO: add manually triggered garbage collector
 fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
     match expr {
@@ -269,19 +315,29 @@ fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
         Expr::Call {
             func_name,
             arguments,
+            is_macro,
         } => {
-            let arguments: Vec<Value> = arguments.iter().map(|expr| eval(expr, env)).collect();
-            let func = env
-                .get(func_name.as_str())
-                .expect("undefined function")
-                .as_func();
-
-            func(&arguments, env)
+            if !is_macro {
+                let evaled_arguments: Vec<Value> =
+                    arguments.iter().map(|expr| eval(expr, env)).collect();
+                let func = env
+                    .get(func_name.as_str())
+                    .expect(&format!("undefined value: {}", func_name))
+                    .as_func();
+                func(&evaled_arguments, env)
+            } else {
+                let func = env
+                    .get(func_name.as_str())
+                    .expect(&format!("undefined value: {}", func_name))
+                    .as_macro();
+                func(arguments, env)
+            }
         }
     }
 }
 
 type Func = fn(&[Value], env: &mut Env<'_>) -> Value;
+type Macro = fn(&[Expr], env: &mut Env<'_>) -> Value;
 type Env<'a> = HashMap<String, Value>;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -289,6 +345,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     env.insert("plus".to_owned(), Value::Func(plus));
     env.insert("let".to_owned(), Value::Func(r#let));
     env.insert("id".to_owned(), Value::Func(id));
+    env.insert("scope".to_owned(), Value::Macro(scope));
     loop {
         print!("repl> ");
         stdout().lock().flush()?;
