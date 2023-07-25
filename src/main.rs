@@ -1,9 +1,12 @@
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     error,
     fmt::Display,
     io::{stdin, stdout, BufRead, Write},
 };
+
+use std::hash::Hash;
 
 #[derive(Debug)]
 enum Expr {
@@ -285,7 +288,7 @@ fn id(args: &[Value], env: &mut Env<'_>) -> Value {
 }
 
 fn scope(exprs: &[Expr], env: &mut Env<'_>) -> Value {
-    let mut new_env = HashMap::new();
+    let mut new_env = Env::default();
     new_env.insert(
         "print".to_owned(),
         Value::Func(|v, _| {
@@ -338,10 +341,28 @@ fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
 
 type Func = fn(&[Value], env: &mut Env<'_>) -> Value;
 type Macro = fn(&[Expr], env: &mut Env<'_>) -> Value;
-type Env<'a> = HashMap<String, Value>;
+
+#[derive(Default)]
+struct Env<'a> {
+    outer: Option<&'a Env<'a>>,
+    defs: HashMap<String, Value>,
+}
+
+impl<'a> Env<'a> {
+    fn insert(&mut self, id: String, value: Value) -> Option<Value> {
+        self.defs.insert(id, value)
+    }
+    fn get<Q>(&self, id: &Q) -> Option<&Value>
+    where
+        Q: Hash + Eq + ?Sized,
+        String: Borrow<Q>,
+    {
+        self.defs.get(id)
+    }
+}
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let mut env = HashMap::new();
+    let mut env = Env::default();
     env.insert("plus".to_owned(), Value::Func(plus));
     env.insert("let".to_owned(), Value::Func(r#let));
     env.insert("id".to_owned(), Value::Func(id));
