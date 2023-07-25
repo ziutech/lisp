@@ -106,23 +106,26 @@ impl<'a> Lexer<'a> {
                     token_type: TokenType::At,
                 })
             }
-            b'"' => loop {
+            b'"' => {
                 position += 1;
-                let c = self.text.get(position)?;
-                match c {
-                    b'"' => {
-                        // self.pos + 1 to remove first quotes
-                        let string = std::str::from_utf8(&self.text[(self.position + 1)..position])
-                            .unwrap()
-                            .to_owned();
-                        self.position = position + 1; // + 1 to skip last quote
-                        break Some(Token {
-                            token_type: TokenType::String(string),
-                        });
+                loop {
+                    let c = self.text.get(position)?;
+                    match c {
+                        b'"' => {
+                            // self.pos + 1 to remove first quotes
+                            let string =
+                                std::str::from_utf8(&self.text[(self.position + 1)..position])
+                                    .unwrap()
+                                    .to_owned();
+                            self.position = position + 1; // + 1 to skip last quote
+                            break Some(Token {
+                                token_type: TokenType::String(string),
+                            });
+                        }
+                        _ => position += 1,
                     }
-                    _ => position += 1,
                 }
-            },
+            }
             b'0'..=b'9' => loop {
                 let c = self.text.get(position)?;
                 match c {
