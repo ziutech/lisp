@@ -289,6 +289,7 @@ fn id(args: &[Value], env: &mut Env<'_>) -> Value {
 
 fn scope(exprs: &[Expr], env: &mut Env<'_>) -> Value {
     let mut new_env = Env::default();
+    new_env.add_outer(env);
     new_env.insert(
         "print".to_owned(),
         Value::Func(|v, _| {
@@ -349,6 +350,9 @@ struct Env<'a> {
 }
 
 impl<'a> Env<'a> {
+    fn add_outer(&mut self, env: &'a mut Env<'_>) {
+        self.outer.replace(env);
+    }
     fn insert(&mut self, id: String, value: Value) -> Option<Value> {
         self.defs.insert(id, value)
     }
@@ -357,7 +361,13 @@ impl<'a> Env<'a> {
         Q: Hash + Eq + ?Sized,
         String: Borrow<Q>,
     {
-        self.defs.get(id)
+        match self.defs.get(id) {
+            Some(v) => Some(v),
+            None => match self.outer {
+                Some(o) => o.get(id),
+                None => None,
+            },
+        }
     }
 }
 
