@@ -372,6 +372,12 @@ impl<'a> Env<'a> {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
+    let debug = std::env::args()
+        .skip(1)
+        .take(1)
+        .next()
+        .map(|x| x.parse().unwrap())
+        .unwrap_or(false);
     let mut env = Env::default();
     env.insert("plus".to_owned(), Value::Func(plus));
     env.insert("let".to_owned(), Value::Func(r#let));
@@ -384,7 +390,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         stdin().lock().read_line(&mut buf)?;
         let text: Vec<u8> = buf.bytes().collect();
         let expr = Parser::new(&text).parse();
-        println!("{expr:?}");
+        if debug {
+            println!("{expr:?}");
+        }
 
         let result = eval(&expr, &mut env);
         println!("{}", result);
