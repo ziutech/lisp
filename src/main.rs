@@ -14,13 +14,21 @@ enum Expr {
     String(String),
     Ident {
         ident: String,
-        is_bind: bool,
     },
     Call {
         func_name: String,
         arguments: Vec<Expr>,
         is_macro: bool,
     },
+}
+
+impl Expr {
+    fn as_ident(&self) -> &str {
+        match self {
+            Expr::Ident { ident } => ident,
+            _ => panic!("not an ident"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +80,6 @@ impl Value {
 enum TokenType {
     LeftParen,
     RightParen,
-    At,
     Colon,
     String(String),
     Ident(String),
@@ -114,12 +121,6 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
                 Some(Token {
                     token_type: TokenType::RightParen,
-                })
-            }
-            b'@' => {
-                self.position += 1;
-                Some(Token {
-                    token_type: TokenType::At,
                 })
             }
             b':' => {
@@ -238,22 +239,9 @@ impl<'a> Parser<'a> {
                     arguments.push(expr);
                 }
                 TokenType::String(s) => arguments.push(Expr::String(s)),
-                TokenType::Ident(s) => arguments.push(Expr::Ident {
-                    ident: s,
-                    is_bind: false,
-                }),
+                TokenType::Ident(s) => arguments.push(Expr::Ident { ident: s }),
                 TokenType::Number(i) => arguments.push(Expr::Number(i)),
                 TokenType::RightParen => break,
-                TokenType::At => {
-                    let ident = match self.tokens.next().unwrap().token_type {
-                        TokenType::Ident(s) => s,
-                        t => panic!("invalid token: {t:#?}"),
-                    };
-                    arguments.push(Expr::Ident {
-                        ident,
-                        is_bind: true,
-                    });
-                }
                 TokenType::Colon => panic!("unexpected colon"),
             }
         }
@@ -276,9 +264,9 @@ fn plus(args: &[Value], env: &mut Env<'_>) -> Value {
     return Value::Number(acc);
 }
 
-fn r#let(args: &[Value], env: &mut Env<'_>) -> Value {
-    let name = args[0].as_str();
-    let value = args[1].clone();
+fn r#let(args: &[Expr], env: &mut Env<'_>) -> Value {
+    let name = args[0].as_ident();
+    let value = eval(&args[1], env);
     env.insert(name.to_owned(), value.clone());
     value.clone()
 }
@@ -309,13 +297,7 @@ fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
     match expr {
         Expr::String(s) => Value::String(s.clone()),
         Expr::Number(i) => Value::Number(*i),
-        Expr::Ident { ident, is_bind } => {
-            if *is_bind {
-                Value::String(ident.clone())
-            } else {
-                env.get(ident).expect("undefined identifier").clone()
-            }
-        }
+        Expr::Ident { ident } => env.get(ident).expect("undefined identifier").clone(),
         Expr::Call {
             func_name,
             arguments,
@@ -380,7 +362,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .unwrap_or(false);
     let mut env = Env::default();
     env.insert("plus".to_owned(), Value::Func(plus));
-    env.insert("let".to_owned(), Value::Func(r#let));
+    env.insert("let".to_owned(), Value::Macro(r#let));
     env.insert("id".to_owned(), Value::Func(id));
     env.insert("scope".to_owned(), Value::Macro(scope));
     loop {
