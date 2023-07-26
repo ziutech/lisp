@@ -180,11 +180,10 @@ impl<'a> Lexer<'a> {
                     }
                 }
             },
-            b' ' => {
+            b' ' | b'\t' | b'\n' => {
                 self.position += 1;
                 self.make_token()
             }
-            b'\n' => return None,
             a => panic!("unexpected token: {}", a),
         }
     }
@@ -368,9 +367,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     loop {
         print!("repl> ");
         stdout().lock().flush()?;
-        let mut buf = String::new();
-        stdin().lock().read_line(&mut buf)?;
-        let text: Vec<u8> = buf.bytes().collect();
+        let mut nestion = 0; // how deep is the code nested / how many unclosed '(' there are
+        let mut text = vec![];
+        loop {
+            let mut buf = String::new();
+            stdin().lock().read_line(&mut buf)?;
+            for x in buf.bytes() {
+                match x {
+                    b'(' => nestion += 1,
+                    b')' => nestion -= 1,
+                    _ => {}
+                }
+            }
+            text.extend_from_slice(buf.as_bytes());
+            if nestion == 0 {
+                break;
+            }
+        }
         let expr = Parser::new(&text).parse();
         if debug {
             println!("{expr:?}");
