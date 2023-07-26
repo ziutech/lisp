@@ -365,7 +365,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     env.insert("id".to_owned(), Value::Func(id));
     env.insert("scope".to_owned(), Value::Macro(scope));
     loop {
-        print!("repl> ");
+        print!(":: ");
         stdout().lock().flush()?;
         let mut nestion = 0; // how deep is the code nested / how many unclosed '(' there are
         let mut text = vec![];
@@ -383,6 +383,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if nestion == 0 {
                 break;
             }
+            for _ in 0..nestion {
+                print!("--")
+            }
+            print!(" ");
+            stdout().flush();
         }
         let expr = Parser::new(&text).parse();
         if debug {
@@ -390,6 +395,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
 
         let result = eval(&expr, &mut env);
-        println!("{}", result);
+        println!("== {}", result);
     }
 }
