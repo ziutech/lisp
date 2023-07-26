@@ -212,14 +212,6 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.make_token()
-    }
-}
-
 struct Parser<'a> {
     tokens: Lexer<'a>,
 }
@@ -232,7 +224,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) -> Expr {
-        let tok = self.tokens.next().unwrap().token_type;
+        let tok = self.tokens.make_token().unwrap().token_type;
         if tok != TokenType::LeftParen {
             panic!("expected left paren, got: {tok:?}");
         }
@@ -241,10 +233,10 @@ impl<'a> Parser<'a> {
 
     fn parse_sexpr(&mut self) -> Expr {
         let mut is_macro = false;
-        let func_name = match self.tokens.next().unwrap().token_type {
+        let func_name = match self.tokens.make_token().unwrap().token_type {
             TokenType::Colon => {
                 is_macro = true;
-                let TokenType::Ident(ident) = self.tokens.next().unwrap().token_type else {
+                let TokenType::Ident(ident) = self.tokens.make_token().unwrap().token_type else {
                     panic!("expected an colon or identifier");
                 };
                 ident
@@ -254,7 +246,7 @@ impl<'a> Parser<'a> {
         };
         let mut arguments = Vec::new();
         loop {
-            let tok = self.tokens.next().unwrap();
+            let tok = self.tokens.make_token().unwrap();
             match tok.token_type {
                 TokenType::LeftParen => {
                     let expr = self.parse_sexpr();
@@ -279,7 +271,7 @@ impl<'a> Parser<'a> {
     fn parse_array(&mut self) -> Expr {
         let mut elements = Vec::new();
         loop {
-            let tok = self.tokens.next().unwrap();
+            let tok = self.tokens.make_token().unwrap();
             match tok.token_type {
                 TokenType::String(s) => elements.push(Expr::String(s)),
                 TokenType::Ident(i) => elements.push(Expr::Ident { ident: i }),
