@@ -15,6 +15,7 @@ enum Expr {
     Ident {
         ident: String,
     },
+    Array(Vec<Expr>),
     Call {
         func_name: String,
         arguments: Vec<Expr>,
@@ -36,19 +37,27 @@ enum Value {
     Nil,
     Number(i32),
     String(String),
+    Array(Vec<Value>),
     Func(Func),
     Macro(Macro),
 }
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\t")?;
         match self {
-            Value::Nil => writeln!(f, "nil"),
-            Value::Number(i) => writeln!(f, "{i}"),
-            Value::String(s) => writeln!(f, "\"{s}\""),
+            Value::Nil => write!(f, "nil"),
+            Value::Number(i) => write!(f, "{i}"),
+            Value::String(s) => write!(f, "\"{s}\""),
             Value::Func(_) => todo!("display for functions"),
             Value::Macro(_) => todo!("display for macros"),
+            Value::Array(values) => {
+                write!(f, "[")?;
+                for v in values {
+                    write!(f, " {}", v)?;
+                }
+                writeln!(f, " ]")?;
+                Ok(())
+            }
         }
     }
 }
@@ -80,6 +89,8 @@ impl Value {
 enum TokenType {
     LeftParen,
     RightParen,
+    LeftSquare,
+    RightSquare,
     Colon,
     String(String),
     Ident(String),
@@ -121,6 +132,18 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
                 Some(Token {
                     token_type: TokenType::RightParen,
+                })
+            }
+            b'[' => {
+                self.position += 1;
+                Some(Token {
+                    token_type: TokenType::LeftSquare,
+                })
+            }
+            b']' => {
+                self.position += 1;
+                Some(Token {
+                    token_type: TokenType::RightSquare,
                 })
             }
             b':' => {
@@ -242,6 +265,8 @@ impl<'a> Parser<'a> {
                 TokenType::Number(i) => arguments.push(Expr::Number(i)),
                 TokenType::RightParen => break,
                 TokenType::Colon => panic!("unexpected colon"),
+                TokenType::LeftSquare => arguments.push(self.parse_array()),
+                TokenType::RightSquare => panic!("unexpected right square bracket"),
             }
         }
         Expr::Call {
@@ -249,6 +274,21 @@ impl<'a> Parser<'a> {
             arguments,
             is_macro,
         }
+    }
+
+    fn parse_array(&mut self) -> Expr {
+        let mut elements = Vec::new();
+        loop {
+            let tok = self.tokens.next().unwrap();
+            match tok.token_type {
+                TokenType::String(s) => elements.push(Expr::String(s)),
+                TokenType::Ident(i) => elements.push(Expr::Ident { ident: i }),
+                TokenType::Number(n) => elements.push(Expr::Number(n)),
+                TokenType::RightSquare => break,
+                _ => panic!("unexpected {:?}", tok),
+            }
+        }
+        Expr::Array(elements)
     }
 }
 
@@ -318,6 +358,13 @@ fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
                 func(arguments, env)
             }
         }
+        Expr::Array(exprs) => {
+            let mut values = vec![];
+            for expr in exprs {
+                values.push(eval(expr, env));
+            }
+            Value::Array(values)
+        }
     }
 }
 
@@ -383,6 +430,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if nestion == 0 {
                 break;
             }
+            print!("----- ");
+            stdout().lock().flush()?;
         }
         let expr = Parser::new(&text).parse();
         if debug {
@@ -390,6 +439,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
 
         let result = eval(&expr, &mut env);
-        println!("{}", result);
+        println!("::::: {}", result);
     }
 }
