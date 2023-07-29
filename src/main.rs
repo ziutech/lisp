@@ -416,6 +416,15 @@ struct Env<'a> {
 }
 
 impl<'a> Env<'a> {
+    fn basic() -> Self {
+        let mut env = Env::default();
+        env.insert("plus".to_owned(), Value::Func(plus));
+        env.insert("let".to_owned(), Value::Macro(r#let));
+        env.insert("id".to_owned(), Value::Func(id));
+        env.insert("scope".to_owned(), Value::Macro(scope));
+        env.insert("def".to_owned(), Value::Macro(def));
+        env
+    }
     fn add_outer(&mut self, env: &'a mut Env<'_>) {
         self.outer.replace(env);
     }
@@ -443,19 +452,13 @@ impl<'a> Env<'a> {
     }
 }
 
-fn main() -> Result<(), Box<dyn error::Error>> {
-    let debug = std::env::args()
-        .skip(1)
+fn repl(args: impl Iterator<Item = String>) -> Result<(), Box<dyn error::Error>> {
+    let debug = args
         .take(1)
         .next()
         .map(|x| x.parse().unwrap())
         .unwrap_or(false);
-    let mut env = Env::default();
-    env.insert("plus".to_owned(), Value::Func(plus));
-    env.insert("let".to_owned(), Value::Macro(r#let));
-    env.insert("id".to_owned(), Value::Func(id));
-    env.insert("scope".to_owned(), Value::Macro(scope));
-    env.insert("def".to_owned(), Value::Macro(def));
+    let mut env = Env::basic();
     loop {
         print!(":: ");
         stdout().lock().flush()?;
@@ -488,5 +491,27 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         let result = eval(&expr, &mut env);
         println!("== {}", result);
+    }
+}
+
+fn run(mut args: impl Iterator<Item = String>) -> Result<(), Box<dyn error::Error>> {
+    let file_name = args.next().expect("file name");
+    let mut code = std::fs::read_to_string(file_name).unwrap();
+    code.insert_str(0, "(:scope ");
+    code.push_str(")");
+    let expr = Parser::new(code.as_bytes()).parse();
+    let mut env = Env::basic();
+    let result = eval(&expr, &mut env);
+    println!("{result}");
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn error::Error>> {
+    let mut args = std::env::args().skip(1);
+    let command = args.next().unwrap();
+    match command.as_str() {
+        "repl" => repl(args),
+        "run" => run(args),
+        _ => panic!(),
     }
 }
