@@ -8,7 +8,7 @@ use std::{
 
 use std::hash::Hash;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Expr {
     Number(i32),
     String(String),
@@ -16,6 +16,7 @@ enum Expr {
         ident: String,
     },
     Array(Vec<Expr>),
+    // TODO: order should be name -> is_macro -> arguments
     Call {
         func_name: String,
         arguments: Vec<Expr>,
@@ -40,6 +41,7 @@ enum Value {
     Array(Vec<Value>),
     Func(Func),
     Macro(Macro),
+    DefFunc(DefFunc),
 }
 
 impl Display for Value {
@@ -48,8 +50,8 @@ impl Display for Value {
             Value::Nil => write!(f, "nil"),
             Value::Number(i) => write!(f, "{i}"),
             Value::String(s) => write!(f, "\"{s}\""),
-            Value::Func(_) => todo!("display for functions"),
-            Value::Macro(_) => todo!("display for macros"),
+            Value::Func(f) => todo!("func: {f:?}"),
+            Value::Macro(f) => todo!("macro {f:?}"),
             Value::Array(values) => {
                 write!(f, "[")?;
                 for v in values {
@@ -58,6 +60,7 @@ impl Display for Value {
                 writeln!(f, " ]")?;
                 Ok(())
             }
+            Value::DefFunc(f) => todo!("{f}"),
         }
     }
 }
@@ -302,6 +305,45 @@ fn r#let(args: &[Expr], env: &mut Env<'_>) -> Value {
     value.clone()
 }
 
+#[derive(Debug, Clone)]
+struct DefFunc {
+    params: Vec<String>,
+    code: Expr,
+}
+
+impl Display for DefFunc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "args: {:?}", self.params)?;
+        write!(f, "code: \n{:?}", self.code)?;
+        Ok(())
+    }
+}
+
+impl DefFunc {
+    fn call(&self, args: &[Value], env: &mut Env<'_>) -> Value {
+        let mut new_env = Env::default();
+        for (i, p) in self.params.iter().enumerate() {
+            new_env.insert(p.to_owned(), args[i].clone());
+        }
+        new_env.add_outer(env);
+        eval(&self.code, &mut new_env)
+    }
+}
+
+fn def(args: &[Expr], env: &mut Env<'_>) -> Value {
+    let name = args[0].as_ident();
+    let last_index = args.len() - 1;
+    let params = args[1..(last_index)]
+        .iter()
+        .map(|x| x.as_ident().to_owned())
+        .collect();
+    let code = args.last().unwrap().clone();
+    let def_func = DefFunc { params, code };
+    let def_func = Value::DefFunc(def_func);
+    env.insert(name.to_owned(), def_func.clone());
+    Value::Nil
+}
+
 fn id(args: &[Value], env: &mut Env<'_>) -> Value {
     args[0].clone()
 }
@@ -340,8 +382,12 @@ fn eval(expr: &Expr, env: &mut Env<'_>) -> Value {
                 let func = env
                     .get(func_name.as_str())
                     .expect(&format!("undefined value: {}", func_name))
-                    .as_func();
-                func(&evaled_arguments, env)
+                    .clone();
+                match func {
+                    Value::Func(f) => f(&evaled_arguments, env),
+                    Value::DefFunc(f) => f.call(&evaled_arguments, env),
+                    _ => panic!("not a function"),
+                }
             } else {
                 let func = env
                     .get(func_name.as_str())
@@ -389,6 +435,12 @@ impl<'a> Env<'a> {
             },
         }
     }
+
+    fn print_defs(&self) {
+        for x in &self.defs {
+            println!("{x:?}");
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -403,6 +455,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     env.insert("let".to_owned(), Value::Macro(r#let));
     env.insert("id".to_owned(), Value::Func(id));
     env.insert("scope".to_owned(), Value::Macro(scope));
+    env.insert("def".to_owned(), Value::Macro(def));
     loop {
         print!(":: ");
         stdout().lock().flush()?;
