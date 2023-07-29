@@ -383,10 +383,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if nestion == 0 {
                 break;
             }
+            print!("-- ");
             for _ in 0..nestion {
-                print!("--")
+                print!("  ");
             }
-            print!(" ");
             stdout().flush();
         }
         let expr = Parser::new(&text).parse();
