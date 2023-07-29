@@ -94,6 +94,8 @@ enum TokenType {
     RightParen,
     LeftSquare,
     RightSquare,
+    LeftBrace,
+    RightBrace,
     Colon,
     String(String),
     Ident(String),
@@ -135,6 +137,18 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
                 Some(Token {
                     token_type: TokenType::RightParen,
+                })
+            }
+            b'{' => {
+                self.position += 1;
+                Some(Token {
+                    token_type: TokenType::LeftBrace,
+                })
+            }
+            b'}' => {
+                self.position += 1;
+                Some(Token {
+                    token_type: TokenType::RightBrace,
                 })
             }
             b'[' => {
@@ -228,10 +242,11 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) -> Expr {
         let tok = self.tokens.make_token().unwrap().token_type;
-        if tok != TokenType::LeftParen {
-            panic!("expected left paren, got: {tok:?}");
+        match tok {
+            TokenType::LeftParen => self.parse_sexpr(),
+            TokenType::LeftBrace => self.parse_scope(),
+            _ => panic!("expected left paren, got: {tok:?}"),
         }
-        self.parse_sexpr()
     }
 
     fn parse_sexpr(&mut self) -> Expr {
@@ -262,12 +277,31 @@ impl<'a> Parser<'a> {
                 TokenType::Colon => panic!("unexpected colon"),
                 TokenType::LeftSquare => arguments.push(self.parse_array()),
                 TokenType::RightSquare => panic!("unexpected right square bracket"),
+                TokenType::LeftBrace => arguments.push(self.parse_scope()),
+                TokenType::RightBrace => panic!("unexpected right brace"),
             }
         }
         Expr::Call {
             func_name,
             arguments,
             is_macro,
+        }
+    }
+
+    fn parse_scope(&mut self) -> Expr {
+        let mut exprs = vec![];
+        loop {
+            let tok = self.tokens.make_token().unwrap();
+            match tok.token_type {
+                TokenType::LeftParen => exprs.push(self.parse_sexpr()),
+                TokenType::RightBrace => break,
+                t => panic!("unexpected token {t:?}"),
+            }
+        }
+        Expr::Call {
+            func_name: "scope".to_owned(),
+            arguments: exprs,
+            is_macro: true,
         }
     }
 
@@ -471,6 +505,8 @@ fn repl(args: impl Iterator<Item = String>) -> Result<(), Box<dyn error::Error>>
                 match x {
                     b'(' => nestion += 1,
                     b')' => nestion -= 1,
+                    b'{' => nestion += 1,
+                    b'}' => nestion -= 1,
                     _ => {}
                 }
             }
